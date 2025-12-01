@@ -343,6 +343,10 @@ proc nimblePaths(): seq[string] =
   for p in queryNimSettingSeq("nimblePaths"):
     result.addRootIfDir(p)
 
+proc searchPaths(): seq[string] =
+  for p in queryNimSettingSeq("searchPaths"):
+    result.addRootIfDir(p)
+
 proc main() =
   ## Simple CLI for ntagger.
   ##
@@ -429,8 +433,7 @@ proc main() =
   if atlasMode or atlasAllMode:
     let depsDir = getCurrentDir() / "deps"
     if not fileExists(depsDir / "tags") or atlasAllMode:
-      for pth in walkDirs(depsDir / "*"):
-        echo "PATH: ", pth
+      for pth in searchPaths():
         let name = pth.splitFile().name
         if not name.startsWith("_"): rootsToScan.add(pth)
       let depTags = generateCtagsForDirImpl([getCurrentDir()], [depsDir], baseDir = depsDir)
