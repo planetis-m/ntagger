@@ -13,3 +13,4 @@ task test, "Compile and run all tests in tests/":
         if not name.startsWith("t"): continue # run only t*.nim files
         echo fmt"[sigils] Running {path}"
         exec fmt"nim c --nimcache:../.nimcache -r {path}"
+
