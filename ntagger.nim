@@ -153,6 +153,7 @@ proc generateCtagsForDir*(root: string): string =
       t.file & "\t" &
       $t.line & ";\"\t" &
       "kind:" & tagKindName(t.kind) & "\t" &
+      "line:" & $t.line & "\t" &
       "language:Nim" & "\n"
     )
 
