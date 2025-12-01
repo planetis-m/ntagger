@@ -1,6 +1,6 @@
 import std/[os, strutils, algorithm, parseopt]
 
-import deps/compiler/[ast, syntaxes, options, idents, msgs, pathutils, renderer]
+import compiler/[ast, syntaxes, options, idents, msgs, pathutils, renderer]
 
 type
   TagKind* = enum

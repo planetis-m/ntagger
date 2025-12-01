@@ -2,6 +2,12 @@
 switch("nimcache", ".nimcache")
 
 import std/[os, strformat, strutils]
+import std/compilesettings
+
+let nc = querySetting(libPath).splitFile.dir
+
+echo "NC: ", nc
+switch("path", nc)
 
 const testDir = "tests"
 
