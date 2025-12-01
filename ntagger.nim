@@ -204,17 +204,24 @@ when isMainModule:
   for kind, key, val in parser.getopt():
     case kind
     of cmdShortOption, cmdLongOption:
-      case key
-      of "f", "output":
-        if val.len > 0:
-          outFile = val
-          expectOutFile = false
-        else:
-          # Remember that the next argument should be treated as the
-          # value for this option (e.g. `-f tags`).
-          expectOutFile = true
+      # Special-case a lone '-' that is parsed as a short option with
+      # an empty name: treat it as the filename "-" when it follows
+      # `-f`.
+      if expectOutFile and kind == cmdShortOption and key.len == 0:
+        outFile = "-"
+        expectOutFile = false
       else:
-        discard
+        case key
+        of "f", "output":
+          if val.len > 0:
+            outFile = val
+            expectOutFile = false
+          else:
+            # Remember that the next argument should be treated as the
+            # value for this option (e.g. `-f tags`).
+            expectOutFile = true
+        else:
+          discard
     of cmdArgument:
       if expectOutFile:
         outFile = key
