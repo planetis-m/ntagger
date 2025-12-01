@@ -432,9 +432,9 @@ proc main() =
   if root.len == 0:
     root = getCurrentDir()
   var rootsToScan: seq[string] = @[]
+  let depsDir =  "deps"
 
   if atlasMode or atlasAllMode:
-    let depsDir =  "deps"
     if not fileExists(depsDir / "tags") or atlasAllMode:
       for pth in searchPaths():
         let name = pth.splitFile().name
@@ -460,6 +460,11 @@ proc main() =
     # user has explicitly provided a different `-f`/`--output`.
     if outFile.len == 0:
       outFile = "tags"
+
+  if systemMode:
+    for pth in searchPaths():
+      if pth.isRelativeTo(depsDir): continue
+      rootsToScan.add(pth)
 
   let tags =
     if autoMode or systemMode:
