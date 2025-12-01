@@ -274,7 +274,10 @@ proc generateCtagsForDirImpl(
   for t in tags:
     let relFile =
       try:
-        relativePath(t.file, baseDir)
+        if isRelativeTo(t.file, baseDir):
+          relativePath(t.file, baseDir)
+        else:
+          t.file
       except OSError:
         # Fallback to the original path if a relative path cannot be
         # constructed for some reason.
@@ -428,20 +431,21 @@ proc main() =
   if root.len == 0:
     root = getCurrentDir()
   var rootsToScan: seq[string] = @[]
-  rootsToScan.add root
 
   if atlasMode or atlasAllMode:
-    let depsDir = getCurrentDir() / "deps"
+    let depsDir =  "deps"
     if not fileExists(depsDir / "tags") or atlasAllMode:
       for pth in searchPaths():
         let name = pth.splitFile().name
         if not name.startsWith("_"): rootsToScan.add(pth)
-      let depTags = generateCtagsForDirImpl([getCurrentDir()], [depsDir], baseDir = depsDir)
+      let depTags = generateCtagsForDirImpl(rootsToScan, [], baseDir = depsDir)
       writeFile(depsDir/"tags", depTags)
 
     let tags = generateCtagsForDirImpl([getCurrentDir()], [depsDir])
     writeFile("tags", tags)
     return
+  else:
+    rootsToScan.add root
 
   if autoMode:
     # Query Nim for its search paths and Nimble package paths and
