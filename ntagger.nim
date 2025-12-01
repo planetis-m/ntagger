@@ -217,7 +217,12 @@ proc isExcludedPath(path: string, excludes: openArray[string]): bool =
     if normalized.contains(normPat):
       return true
 
-proc generateCtagsForDirImpl(roots: openArray[string], excludes: openArray[string]): string =
+proc generateCtagsForDirImpl(
+    roots: openArray[string],
+    excludes: openArray[string],
+    baseDir = getCurrentDir()
+): string =
+
   ## Generate a universal-ctags compatible tags file for all Nim
   ## modules found under one or more `roots` (searched recursively),
   ## optionally skipping files whose paths match any of the
@@ -265,8 +270,6 @@ proc generateCtagsForDirImpl(roots: openArray[string], excludes: openArray[strin
   result.add "!_TAG_FILE_SORTED\t1\t/0=unsorted, 1=sorted, 2=foldcase/\n"
   result.add "!_TAG_PROGRAM_NAME\tntagger\t//\n"
   result.add "!_TAG_PROGRAM_VERSION\t0.1\t//\n"
-
-  let baseDir = getCurrentDir()
 
   for t in tags:
     let relFile =
@@ -365,6 +368,7 @@ proc main() =
     autoMode = false
     systemMode = false
     atlasMode = false
+    atlasAllMode = false
     excludes: seq[string] = @[]
 
   var parser = initOptParser(commandLineParams())
@@ -399,6 +403,8 @@ proc main() =
           autoMode = true
         of "s", "system":
           systemMode = true
+        of "atlas-all":
+          atlasAllMode = true
         of "atlas":
           atlasMode = true
         else:
@@ -420,19 +426,17 @@ proc main() =
   var rootsToScan: seq[string] = @[]
   rootsToScan.add root
 
-  if atlasMode:
-    let depsDir = "deps"
-    createDir("deps"/"_ctags")
-    for pth in walkDirs(depsDir / "*"):
-      let name = pth.splitFile().name
-      if name.startsWith("_"): continue
-      let ctags = depsDir / "_ctags" / name & ".ctag"
-      echo "DEPS: ", ctags
-      if not fileExists(ctags):
-        let tags = generateCtagsForDir(pth, [])
-        writeFile(ctags, tags)
+  if atlasMode or atlasAllMode:
+    let depsDir = getCurrentDir() / "deps"
+    if not fileExists(depsDir / "tags") or atlasAllMode:
+      for pth in walkDirs(depsDir / "*"):
+        echo "PATH: ", pth
+        let name = pth.splitFile().name
+        if not name.startsWith("_"): rootsToScan.add(pth)
+      let depTags = generateCtagsForDirImpl([getCurrentDir()], [depsDir], baseDir = depsDir)
+      writeFile(depsDir/"tags", depTags)
 
-    let tags = generateCtagsForDir(getCurrentDir(), [depsDir])
+    let tags = generateCtagsForDirImpl([getCurrentDir()], [depsDir])
     writeFile("tags", tags)
     return
 
