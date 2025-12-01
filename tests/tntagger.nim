@@ -2,13 +2,25 @@ import std/[unittest, os, strutils, sequtils]
 
 import ntagger
 
+proc sampleDir(): string =
+  ## Resolve the location of the sample1 test directory
+  ## regardless of whether the test is run from the repo root
+  ## or from within the tests/ directory.
+  let cwd = getCurrentDir()
+  if dirExists(cwd / "sample1"):
+    result = cwd / "sample1"
+  elif dirExists(cwd / "tests" / "sample1"):
+    result = cwd / "tests" / "sample1"
+  else:
+    raise newException(OSError, "sample1 test directory not found")
+
 proc tagsLinesForDir(dir: string): seq[string] =
   let tagsText = generateCtagsForDir(dir)
   tagsText.splitLines.filterIt(it.len > 0)
 
 suite "ctags output":
   test "header is extended ctags":
-    let tmp = "tests/sample1/"
+    let tmp = sampleDir()
     let lines = tagsLinesForDir(tmp)
     for line in lines:
       echo "LINE: ", line
@@ -18,7 +30,7 @@ suite "ctags output":
     check lines[2].startsWith("!_TAG_PROGRAM_NAME\tntagger\t")
 
   test "tag lines follow extended format":
-    let tmp = "tests/sample1"
+    let tmp = sampleDir()
     let lines = tagsLinesForDir(tmp)
     # Skip header lines
     let tagLines = lines.filterIt(not it.startsWith("!_TAG_"))
