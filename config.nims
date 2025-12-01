@@ -1,15 +1,11 @@
 # NimScript configuration and tasks for this repo
-switch("nimcache", ".nimcache")
-
 import std/[os, strformat, strutils]
 import std/compilesettings
-
 let nc = querySetting(libPath).splitFile.dir
+let testDir = "tests"
 
-echo "NC: ", nc
 switch("path", nc)
-
-const testDir = "tests"
+switch("nimcache", ".nimcache")
 
 task test, "Compile and run all tests in tests/":
   withDir(testDir):
