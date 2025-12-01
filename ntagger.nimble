@@ -1,6 +1,9 @@
 version = "0.1.0"
-src = "."
-bins = @["ntagger"]
+srcDir = "."
+author = "Jaremy Creechley"
+description = "binary for generating Nim extended ctags files"
+license = "MIT"
+bin = @["ntagger"]
 
 requires "compiler"
 
