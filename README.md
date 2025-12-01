@@ -114,6 +114,33 @@ They are matched against normalized
 `/`-separated paths relative to the scan
 root.
 
+### Auto mode
+
+`--auto` (or `-a`) enables an auto mode
+that makes ntagger behave more like a
+project-wide ctags generator for Nim. In
+this mode:
+
+- The default output file becomes `tags`
+  (equivalent to `-f tags`) unless you
+  explicitly pass a different `-f`.
+- In addition to the chosen root, ntagger
+  also scans the Nim compiler's
+  `searchPaths` and `nimblePaths`, which
+  are discovered by invoking Nim with:
+
+  ```bash
+  nim --verbosity:0 --eval:"import std/compilesettings; for x in querySettingSeq(searchPaths): echo x"
+  nim --verbosity:0 --eval:"import std/compilesettings; for x in querySettingSeq(nimblePaths): echo x"
+  ```
+
+Example:
+
+```bash
+ntagger --auto .          # write tags to ./tags
+ntagger --auto -f mytags .  # override output file name
+```
+
 ## Library usage
 
 You can also call ntagger from Nim code by
@@ -135,4 +162,3 @@ let tagsText = generateCtagsForDir("path/to/project",
 
 The returned string is the full tags file
 contents (including headers).
-

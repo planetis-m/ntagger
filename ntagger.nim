@@ -1,4 +1,4 @@
-import std/[os, strutils, algorithm, parseopt]
+import std/[os, strutils, algorithm, parseopt, osproc]
 
 import compiler/[ast, syntaxes, options, idents, msgs, pathutils, renderer]
 
@@ -217,30 +217,38 @@ proc isExcludedPath(path: string, excludes: openArray[string]): bool =
     if normalized.contains(normPat):
       return true
 
-proc generateCtagsForDirImpl(root: string, excludes: openArray[string]): string =
+proc generateCtagsForDirImpl(roots: openArray[string], excludes: openArray[string]): string =
   ## Generate a universal-ctags compatible tags file for all Nim
-  ## modules found under `root` (searched recursively), optionally
-  ## skipping files whose paths match any of the `excludes` patterns.
+  ## modules found under one or more `roots` (searched recursively),
+  ## optionally skipping files whose paths match any of the
+  ## `excludes` patterns.
+  if roots.len == 0:
+    return
+
   var conf = newConfigRef()
-  let absRoot = absolutePath(root)
-  conf.projectPath = AbsoluteDir(absRoot)
+  let mainRoot = absolutePath(roots[0])
+  conf.projectPath = AbsoluteDir(mainRoot)
   var cache = newIdentCache()
 
   var tags: seq[Tag] = @[]
-  for path in walkDirRec(absRoot):
-    if not path.endsWith(".nim"):
-      continue
 
-    let relPath =
-      try:
-        relativePath(path, absRoot)
-      except OSError:
-        path
+  for root in roots:
+    let absRoot = absolutePath(root)
 
-    if isExcludedPath(relPath, excludes):
-      continue
+    for path in walkDirRec(absRoot):
+      if not path.endsWith(".nim"):
+        continue
 
-    tags.add collectTagsForFile(conf, cache, path)
+      let relPath =
+        try:
+          relativePath(path, absRoot)
+        except OSError:
+          path
+
+      if isExcludedPath(relPath, excludes):
+        continue
+
+      tags.add collectTagsForFile(conf, cache, path)
 
   # Sort tags by name, then file, then line, as expected by ctags
   # when reporting a sorted file.
@@ -285,12 +293,42 @@ proc generateCtagsForDirImpl(root: string, excludes: openArray[string]): string 
 proc generateCtagsForDir*(root: string): string =
   ## Backwards-compatible wrapper that generates tags without any
   ## exclude patterns.
-  result = generateCtagsForDirImpl(root, [])
+  result = generateCtagsForDirImpl([root], [])
 
 proc generateCtagsForDir*(root: string, excludes: openArray[string]): string =
   ## Generate tags while skipping files whose relative paths match
   ## any of the provided exclude patterns.
-  result = generateCtagsForDirImpl(root, excludes)
+  result = generateCtagsForDirImpl([root], excludes)
+
+proc queryNimSettingSeq(setting: string): seq[string] =
+  ## Invoke the Nim compiler to query a setting sequence such as
+  ## `searchPaths` or `nimblePaths`, returning the list of paths.
+  let evalCode =
+    "import std/compilesettings; for x in querySettingSeq(" &
+    setting & "): echo x"
+  try:
+    let output = execProcess("nim",
+                             args = ["--verbosity:0", "--eval:" & evalCode],
+                             options = {poStdErrToStdOut, poUsePath})
+    for line in output.splitLines:
+      let trimmed = line.strip()
+      if trimmed.len > 0:
+        result.add trimmed
+  except CatchableError:
+    # If Nim is not available or the query fails, just return an
+    # empty list and continue without the extra paths.
+    discard
+
+proc addRootIfDir(roots: var seq[string], path: string) =
+  ## Add `path` to `roots` if it is a directory and not already
+  ## present in the list.
+  let p = path.strip()
+  if p.len == 0 or not dirExists(p):
+    return
+  for existing in roots:
+    if existing == p:
+      return
+  roots.add(p)
 
 when isMainModule:
   ## Simple CLI for ntagger.
@@ -303,12 +341,18 @@ when isMainModule:
   ## values are simple path substrings; any Nim file whose path (relative
   ## to the search root) contains one of these substrings will be
   ## skipped, similar to ctags' exclude handling.
+  ##
+  ## The `--auto`/`-a` flag enables an "auto" mode that sets the
+  ## default output file to `tags` and also includes tags for Nim
+  ## search paths and Nimble package paths discovered via the Nim
+  ## compiler's `compilesettings` module.
 
   var
     root = ""
     outFile = ""
     expectOutFile = false
     expectExclude = false
+    autoMode = false
     excludes: seq[string] = @[]
 
   var parser = initOptParser(commandLineParams())
@@ -339,6 +383,8 @@ when isMainModule:
           else:
             # Next argument will be treated as an exclude pattern.
             expectExclude = true
+        of "a", "auto":
+          autoMode = true
         else:
           discard
     of cmdArgument:
@@ -355,11 +401,29 @@ when isMainModule:
 
   if root.len == 0:
     root = getCurrentDir()
+  var rootsToScan: seq[string] = @[]
+  rootsToScan.add root
 
-  let tags = generateCtagsForDir(root, excludes)
+  if autoMode:
+    # Query Nim for its search paths and Nimble package paths and
+    # include those directories as additional roots.
+    for p in queryNimSettingSeq("searchPaths"):
+      addRootIfDir(rootsToScan, p)
+    for p in queryNimSettingSeq("nimblePaths"):
+      addRootIfDir(rootsToScan, p)
+
+    # In auto mode, default the output file to `tags` unless the
+    # user has explicitly provided a different `-f`/`--output`.
+    if outFile.len == 0:
+      outFile = "tags"
+
+  let tags =
+    if autoMode:
+      generateCtagsForDirImpl(rootsToScan, excludes)
+    else:
+      generateCtagsForDir(root, excludes)
 
   if outFile.len == 0 or outFile == "-":
     stdout.write(tags)
   else:
     writeFile(outFile, tags)
-
