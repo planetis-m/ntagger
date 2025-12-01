@@ -353,6 +353,7 @@ when isMainModule:
     expectOutFile = false
     expectExclude = false
     autoMode = false
+    systemMode = false
     excludes: seq[string] = @[]
 
   var parser = initOptParser(commandLineParams())
@@ -385,6 +386,8 @@ when isMainModule:
             expectExclude = true
         of "a", "auto":
           autoMode = true
+        of "s", "system":
+          systemMode = true
         else:
           discard
     of cmdArgument:
@@ -404,11 +407,13 @@ when isMainModule:
   var rootsToScan: seq[string] = @[]
   rootsToScan.add root
 
+  if systemMode:
+    for p in queryNimSettingSeq("searchPaths"):
+      addRootIfDir(rootsToScan, p)
+
   if autoMode:
     # Query Nim for its search paths and Nimble package paths and
     # include those directories as additional roots.
-    for p in queryNimSettingSeq("searchPaths"):
-      addRootIfDir(rootsToScan, p)
     for p in queryNimSettingSeq("nimblePaths"):
       addRootIfDir(rootsToScan, p)
 
@@ -418,7 +423,7 @@ when isMainModule:
       outFile = "tags"
 
   let tags =
-    if autoMode:
+    if autoMode or systemMode:
       generateCtagsForDirImpl(rootsToScan, excludes)
     else:
       generateCtagsForDir(root, excludes)
