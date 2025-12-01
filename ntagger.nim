@@ -311,7 +311,7 @@ proc queryNimSettingSeq(setting: string): seq[string] =
   ## `searchPaths` or `nimblePaths`, returning the list of paths.
   let evalCode =
     "import std/compilesettings; for x in querySettingSeq(" &
-    setting & "): echo x"
+      setting & "): echo x"
   try:
     let output = execProcess("nim",
                              args = ["--verbosity:0", "--eval:" & evalCode],
