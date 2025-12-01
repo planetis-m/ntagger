@@ -34,17 +34,33 @@ proc addTag(tags: var seq[Tag], file: string, line: int, name: string, k: TagKin
 
 proc nodeName(n: PNode): string =
   ## Extracts the plain identifier name for a symbol definition node.
+  ##
+  ## Mirrors the logic of compiler/docgen.getNameIdent, but returns a
+  ## simple string instead of an identifier.
   case n.kind
-  of nkIdent, nkSym:
-    if n.ident != nil: n.ident.s
-    elif n.sym != nil and n.sym.name != nil: n.sym.name.s
-    else: ""
+  of nkPostfix:
+    result = nodeName(n[1])
+  of nkPragmaExpr:
+    result = nodeName(n[0])
+  of nkSym:
+    if n.sym != nil and n.sym.name != nil:
+      result = n.sym.name.s
+  of nkIdent:
+    if n.ident != nil:
+      result = n.ident.s
+  of nkAccQuoted:
+    for i in 0 ..< n.len:
+      result.add nodeName(n[i])
+  of nkOpenSymChoice, nkClosedSymChoice, nkOpenSym:
+    result = nodeName(n[0])
   else:
-    ""
+    discard
 
 proc collectTagsFromAst(n: PNode, file: string, tags: var seq[Tag]) =
   ## Based on compiler/docgen.generateTags: walks the AST and collects
   ## tags for declarations we care about.
+  when defined(debugTags):
+    echo "[ntagger] visit kind=", $n.kind, " line=", $n.info.line
   case n.kind
   of nkCommentStmt:
     discard
@@ -96,6 +112,8 @@ proc parseNimFile(conf: ConfigRef, cache: IdentCache, file: string): PNode =
 proc collectTagsForFile*(conf: ConfigRef, cache: IdentCache, file: string): seq[Tag] =
   let ast = parseNimFile(conf, cache, file)
   if ast.isNil: return
+  when defined(debugTags):
+    echo "[ntagger] AST root for ", file, " kind=", $ast.kind
   collectTagsFromAst(ast, file, result)
 
 proc generateCtagsForDir*(root: string): string =
