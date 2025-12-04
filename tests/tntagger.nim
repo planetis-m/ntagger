@@ -80,3 +80,13 @@ suite "ctags output":
     # once the file is excluded.
     check linesWithExclude.len >= 4
     check tagLinesWithExclude.len == 0
+
+  test "private symbols can be included explicitly":
+    let tmp = sampleDir()
+    let tagsText = generateCtagsForDir(tmp, @[], true)
+
+    # By default, private symbols are omitted (covered by another
+    # test), but when explicitly requested they should be present
+    # alongside the exported ones.
+    check tagsText.contains("publicProc")
+    check tagsText.contains("privateProc")

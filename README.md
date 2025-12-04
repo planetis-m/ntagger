@@ -25,10 +25,11 @@ ntagger -f tags --exclude:deps
 
 - Generates extended ctags format (with
   `!_TAG_FILE_*` headers).
-- Emits tags for exported Nim symbols:
-  types, `var`/`let`/`const`, procs/funcs,
-  methods, iterators, converters, macros and
-  templates.
+- Emits tags for exported Nim symbols by
+  default: types, `var`/`let`/`const`,
+  procs/funcs, methods, iterators, converters,
+  macros and templates, with an option to also
+  include private (non-exported) symbols.
 - Includes extra fields such as `kind`,
   source `line`, `signature` and
   `language:Nim`.
@@ -114,6 +115,28 @@ They are matched against normalized
 `/`-separated paths relative to the scan
 root.
 
+### Including private symbols
+
+By default, ntagger only emits tags for
+exported symbols (those whose names end with
+`*` in Nim). To also include private
+definitions in the tags output, add the
+`--private` (or `-p`) flag:
+
+```bash
+ntagger --private path/to/project
+ntagger -p --exclude deps .
+```
+
+The `--private` flag works in combination
+with other modes such as `--auto`,
+`--system`, `--atlas` and `--atlas-all`:
+
+```bash
+ntagger --auto --private
+ntagger --atlas-all --private
+```
+
 ### Auto and System Mode
 
 `--auto` (or `-a`) enables an auto mode
@@ -185,6 +208,16 @@ To apply excludes programmatically:
 ```nim
 let tagsText = generateCtagsForDir("path/to/project",
                                    ["deps", "tests"])
+```
+
+To include private symbols alongside exported
+ones from Nim code, use the overload that
+accepts an explicit `includePrivate` flag:
+
+```nim
+let tagsText = generateCtagsForDir("path/to/project",
+                                   @[],     # no excludes
+                                   true)    # include private symbols
 ```
 
 The returned string is the full tags file

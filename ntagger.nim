@@ -33,7 +33,8 @@ proc addTag(tags: var seq[Tag], file: string, line: int, name: string, k: TagKin
             signature = "") =
   if name.len == 0:
     return
-  tags.add Tag(name: name, file: file, line: line, kind: k, signature: signature)
+  tags.add Tag(name: name, file: file, line: line, kind: k,
+      signature: signature)
 
 proc nodeName(n: PNode): string =
   ## Extracts the plain identifier name for a symbol definition node.
@@ -137,37 +138,38 @@ proc buildSignature(n: PNode): string =
       result.add $pragma
     result.add " .}"
 
-proc collectTagsFromAst(n: PNode, file: string, tags: var seq[Tag]) =
+proc collectTagsFromAst(n: PNode, file: string, tags: var seq[Tag],
+    includePrivate: bool) =
   ## Walks the AST and collects tags for declarations we care about.
   case n.kind
   of nkCommentStmt:
     discard
   of nkProcDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkProc, buildSignature(n))
   of nkFuncDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkFunc, buildSignature(n))
   of nkMethodDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkMethod, buildSignature(n))
   of nkIteratorDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkIterator, buildSignature(n))
   of nkMacroDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkMacro, buildSignature(n))
   of nkTemplateDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkTemplate, buildSignature(n))
   of nkConverterDef:
-    if isExportedName(n[namePos]):
+    if includePrivate or isExportedName(n[namePos]):
       let name = nodeName(n[namePos])
       addTag(tags, file, int(n.info.line), name, tkConverter, buildSignature(n))
   of nkTypeSection, nkVarSection, nkLetSection, nkConstSection:
@@ -176,18 +178,18 @@ proc collectTagsFromAst(n: PNode, file: string, tags: var seq[Tag]) =
         continue
       let def = n[i]
       let nameNode = def[0]
-      if isExportedName(nameNode):
+      if includePrivate or isExportedName(nameNode):
         let name = nodeName(nameNode)
         let kindOffset = ord(n.kind) - ord(nkTypeSection)
         let symKind = TagKind(ord(tkType) + kindOffset)
         addTag(tags, file, int(def.info.line), name, symKind)
   of nkStmtList:
     for i in 0 ..< n.len:
-      collectTagsFromAst(n[i], file, tags)
+      collectTagsFromAst(n[i], file, tags, includePrivate)
   of nkWhenStmt:
     # Follow the first branch only, like docgen.generateTags.
     if n.len > 0 and n[0].len > 0:
-      collectTagsFromAst(lastSon(n[0]), file, tags)
+      collectTagsFromAst(lastSon(n[0]), file, tags, includePrivate)
   else:
     discard
 
@@ -196,11 +198,12 @@ proc parseNimFile(conf: ConfigRef, cache: IdentCache, file: string): PNode =
   let idx = fileInfoIdx(conf, abs)
   result = syntaxes.parseFile(idx, cache, conf)
 
-proc collectTagsForFile*(conf: ConfigRef, cache: IdentCache, file: string): seq[Tag] =
+proc collectTagsForFile*(conf: ConfigRef, cache: IdentCache, file: string,
+    includePrivate = false): seq[Tag] =
   let ast = parseNimFile(conf, cache, file)
   if ast.isNil:
     return
-  collectTagsFromAst(ast, file, result)
+  collectTagsFromAst(ast, file, result, includePrivate)
 
 proc isExcludedPath(path: string, excludes: openArray[string]): bool =
   ## Returns true if `path` should be excluded based on the
@@ -220,7 +223,8 @@ proc isExcludedPath(path: string, excludes: openArray[string]): bool =
 proc generateCtagsForDirImpl(
     roots: openArray[string],
     excludes: openArray[string],
-    baseDir = getCurrentDir()
+    baseDir = getCurrentDir(),
+    includePrivate = false
 ): string =
 
   ## Generate a universal-ctags compatible tags file for all Nim
@@ -253,7 +257,7 @@ proc generateCtagsForDirImpl(
       if isExcludedPath(relPath, excludes):
         continue
 
-      tags.add collectTagsForFile(conf, cache, path)
+      tags.add collectTagsForFile(conf, cache, path, includePrivate)
 
   # Sort tags by name, then file, then line, as expected by ctags
   # when reporting a sorted file.
@@ -299,12 +303,19 @@ proc generateCtagsForDirImpl(
 proc generateCtagsForDir*(root: string): string =
   ## Backwards-compatible wrapper that generates tags without any
   ## exclude patterns.
-  result = generateCtagsForDirImpl([root], [])
+  result = generateCtagsForDirImpl([root], [], includePrivate = false)
 
 proc generateCtagsForDir*(root: string, excludes: openArray[string]): string =
   ## Generate tags while skipping files whose relative paths match
   ## any of the provided exclude patterns.
-  result = generateCtagsForDirImpl([root], excludes)
+  result = generateCtagsForDirImpl([root], excludes, includePrivate = false)
+
+proc generateCtagsForDir*(root: string, excludes: openArray[string],
+    includePrivate: bool): string =
+  ## Generate tags while optionally including private symbols when
+  ## `includePrivate` is set to true.
+  result = generateCtagsForDirImpl([root], excludes,
+      includePrivate = includePrivate)
 
 proc queryNimSettingSeq(setting: string): seq[string] =
   ## Invoke the Nim compiler to query a setting sequence such as
@@ -366,6 +377,10 @@ proc main() =
   ## default output file to `tags` and also includes tags for Nim
   ## search paths and Nimble package paths discovered via the Nim
   ## compiler's `compilesettings` module.
+  ##
+  ## The `--private`/`-p` flag controls whether tags are also
+  ## generated for private (non-exported) symbols in addition to
+  ## exported ones.
 
   var
     root = ""
@@ -376,6 +391,7 @@ proc main() =
     systemMode = false
     atlasMode = false
     atlasAllMode = false
+    includePrivate = false
     depsOnly = false
     excludes: seq[string] = @[]
 
@@ -411,6 +427,8 @@ proc main() =
           autoMode = true
         of "s", "system":
           systemMode = true
+        of "p", "private":
+          includePrivate = true
         of "atlas-all":
           atlasAllMode = true
         of "atlas":
@@ -432,7 +450,7 @@ proc main() =
   if root.len == 0:
     root = getCurrentDir()
   var rootsToScan: seq[string] = @[]
-  let depsDir =  "deps"
+  let depsDir = "deps"
 
   if atlasMode or atlasAllMode:
     if not fileExists(depsDir / "tags") or atlasAllMode:
@@ -441,10 +459,12 @@ proc main() =
         if name.startsWith("_"): continue
         if not systemMode and not pth.isRelativeTo(depsDir): continue
         rootsToScan.add(pth)
-      let depTags = generateCtagsForDirImpl(rootsToScan, [])
+      let depTags = generateCtagsForDirImpl(rootsToScan, [],
+          includePrivate = includePrivate)
       writeFile(depsDir/"tags", depTags)
 
-    let tags = generateCtagsForDirImpl([getCurrentDir()], [depsDir])
+    let tags = generateCtagsForDirImpl([getCurrentDir()], [depsDir],
+        includePrivate = includePrivate)
     writeFile("tags", tags)
     return
   else:
@@ -468,9 +488,10 @@ proc main() =
 
   let tags =
     if autoMode or systemMode:
-      generateCtagsForDirImpl(rootsToScan, excludes)
+      generateCtagsForDirImpl(rootsToScan, excludes,
+          includePrivate = includePrivate)
     else:
-      generateCtagsForDir(root, excludes)
+      generateCtagsForDir(root, excludes, includePrivate)
 
   if outFile.len == 0 or outFile == "-":
     stdout.write(tags)
