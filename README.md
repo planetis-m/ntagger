@@ -74,6 +74,7 @@ Basic usage:
 ntagger            # scan . and write tags to stdout
 ntagger path/to/project
 ntagger path/to/file.nim
+ntagger src tests/extra.nim  # multiple roots
 ```
 
 Write tags to a file (like ctags):

@@ -407,7 +407,7 @@ proc main() =
   ## exported ones.
 
   var
-    root = ""
+    roots: seq[string] = @[]
     outFile = ""
     expectOutFile = false
     expectExclude = false
@@ -466,13 +466,13 @@ proc main() =
       elif expectExclude:
         excludes.add key
         expectExclude = false
-      elif root.len == 0:
-        root = key
+      else:
+        roots.add key
     of cmdEnd:
       discard
 
-  if root.len == 0:
-    root = getCurrentDir()
+  if roots.len == 0:
+    roots.add getCurrentDir()
   var rootsToScan: seq[string] = @[]
   let depsDir = "deps"
 
@@ -487,12 +487,14 @@ proc main() =
           includePrivate = includePrivate)
       writeFile(depsDir/"tags", depTags)
 
-    let tags = generateCtagsForDirImpl([getCurrentDir()], [depsDir],
+    var projectRoots: seq[string] = @[]
+    projectRoots.add(roots)
+    let tags = generateCtagsForDirImpl(projectRoots, [depsDir],
         includePrivate = includePrivate)
     writeFile("tags", tags)
     return
   else:
-    rootsToScan.add root
+    rootsToScan.add(roots)
 
   if autoMode:
     # Query Nim for its search paths and Nimble package paths and
@@ -510,12 +512,8 @@ proc main() =
       if pth.isRelativeTo(depsDir): continue
       rootsToScan.add(pth)
 
-  let tags =
-    if autoMode or systemMode:
-      generateCtagsForDirImpl(rootsToScan, excludes,
-          includePrivate = includePrivate)
-    else:
-      generateCtagsForDir(root, excludes, includePrivate)
+  let tags = generateCtagsForDirImpl(rootsToScan, excludes,
+      includePrivate = includePrivate)
 
   if outFile.len == 0 or outFile == "-":
     stdout.write(tags)
