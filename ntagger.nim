@@ -225,8 +225,7 @@ proc generateCtagsForDirImpl(
     excludes: openArray[string],
     baseDir = "",
     includePrivate = false,
-    tagRelative = false,
-    sortTags = true
+    tagRelative = false
 ): string =
 
   ## Generate a universal-ctags compatible tags file for all Nim
@@ -291,24 +290,23 @@ proc generateCtagsForDirImpl(
     for tag in tags.mitems:
       try:
         tag.file = relativePath(tag.file, effectiveBaseDir)
-      except OSError:
+      except ValueError:
         # Keep absolute path if relative cannot be constructed
         discard
 
-  if sortTags:
-    # Sort tags by name, then file, then line, as expected by ctags
-    # when reporting a sorted file.
-    tags.sort(proc (a, b: Tag): int =
-      result = cmp(a.name, b.name)
-      if result == 0:
-        result = cmp(a.file, b.file)
-      if result == 0:
-        result = cmp(a.line, b.line)
-    )
+  # Sort tags by name, then file, then line, as expected by ctags
+  # when reporting a sorted file.
+  tags.sort(proc (a, b: Tag): int =
+    result = cmp(a.name, b.name)
+    if result == 0:
+      result = cmp(a.file, b.file)
+    if result == 0:
+      result = cmp(a.line, b.line)
+  )
 
   # Header lines for extended ctags format
   result.add "!_TAG_FILE_FORMAT\t2\t/extended format/\n"
-  result.add "!_TAG_FILE_SORTED\t" & (if sortTags: "1" else: "0") & "\t/0=unsorted, 1=sorted, 2=foldcase/\n"
+  result.add "!_TAG_FILE_SORTED\t1\t/0=unsorted, 1=sorted, 2=foldcase/\n"
   result.add "!_TAG_PROGRAM_NAME\tntagger\t//\n"
   result.add "!_TAG_PROGRAM_VERSION\t0.1\t//\n"
 
@@ -431,7 +429,6 @@ proc main() =
     includePrivate = false
     depsOnly = false
     tagRelative = false
-    sortTags = true
     excludes: seq[string] = @[]
 
   var parser = initOptParser(commandLineParams())
@@ -477,11 +474,6 @@ proc main() =
             tagRelative = true
           elif val == "no":
             tagRelative = false
-        of "sort":
-          if val == "yes":
-            sortTags = true
-          elif val == "no":
-            sortTags = false
         else:
           discard
     of cmdArgument:
@@ -510,14 +502,14 @@ proc main() =
         rootsToScan.add(pth)
       let depTags = generateCtagsForDirImpl(rootsToScan, [],
           baseDir = (if tagRelative: depsDir else: ""),
-          includePrivate = includePrivate, tagRelative = tagRelative, sortTags = sortTags)
+          includePrivate = includePrivate, tagRelative = tagRelative)
       writeFile(depsDir/"tags", depTags)
 
     var projectRoots: seq[string] = @[]
     projectRoots.add(roots)
     let tags = generateCtagsForDirImpl(projectRoots, [depsDir],
         baseDir = (if tagRelative: getCurrentDir() else: ""),
-        includePrivate = includePrivate, tagRelative = tagRelative, sortTags = sortTags)
+        includePrivate = includePrivate, tagRelative = tagRelative)
     writeFile("tags", tags)
     return
   else:
@@ -541,7 +533,7 @@ proc main() =
 
   let tags = generateCtagsForDirImpl(rootsToScan, excludes,
       baseDir = (if tagRelative: (if outFile.len > 0 and outFile != "-": parentDir(outFile) else: getCurrentDir()) else: ""),
-      includePrivate = includePrivate, tagRelative = tagRelative, sortTags = sortTags)
+      includePrivate = includePrivate, tagRelative = tagRelative)
 
   if outFile.len == 0 or outFile == "-":
     stdout.write(tags)
